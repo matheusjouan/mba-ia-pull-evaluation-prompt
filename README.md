@@ -325,6 +325,118 @@ python src/evaluate.py
 
 ---
 
+## Técnicas Aplicadas (Fase 2)
+
+O prompt otimizado está em [`prompts/bug_to_user_story_v2.yml`](prompts/bug_to_user_story_v2.yml). Foram aplicadas **3 técnicas** (Few-shot é obrigatório; as outras 2 são as técnicas adicionais):
+
+### 1. Few-shot Learning (obrigatória)
+
+- **Por quê:** o prompt v1 não tinha nenhum exemplo, então o modelo não sabia o formato exato esperado (persona + "Como um... eu quero... para que..." + Critérios de Aceitação no estilo Gherkin). Mostrar exemplos concretos de entrada/saída é a forma mais eficaz de alinhar o formato e elevar F1-Score e Clarity.
+- **Como apliquei:** incluí 3 exemplos no `system_prompt`, um para cada nível de complexidade (simples, médio e complexo), cada um demonstrando o formato de saída correspondente.
+
+```text
+## Exemplo 1 — Bug SIMPLES
+Relato de Bug:
+"Ao clicar em 'Esqueci minha senha', nenhum email de recuperação é enviado."
+
+User Story:
+Como um usuário que esqueceu a senha, eu quero receber o email de recuperação, ...
+Critérios de Aceitação:
+- Dado que estou na tela de login
+- Quando clico em "Esqueci minha senha" ...
+```
+
+### 2. Role Prompting (persona detalhada)
+
+- **Por quê:** o v1 usava "um assistente" genérico. Definir uma persona especialista calibra o tom, o vocabulário e a qualidade dos critérios de aceitação, melhorando Clarity e Helpfulness.
+- **Como apliquei:** a primeira linha do `system_prompt` é _"Você é um Product Manager Sênior especialista em metodologias ágeis (Scrum/Kanban) e em escrita de requisitos."_
+
+### 3. Chain of Thought (CoT) silencioso
+
+- **Por quê:** converter um bug em User Story exige raciocínio (quem é a persona, qual o valor, qual a complexidade). CoT melhora a Correctness. Porém, expor esse raciocínio na resposta poluiria a saída e derrubaria Precision/Clarity — por isso o CoT é **silencioso** (o modelo raciocina internamente e responde apenas com a User Story final).
+- **Como apliquei:** a seção "PROCESSO DE RACIOCÍNIO (PENSE PASSO A PASSO, INTERNAMENTE)" lista os passos de análise e instrui explicitamente a NÃO exibir o raciocínio.
+
+### Outros requisitos atendidos
+
+- **Instruções claras e regras explícitas:** seções "REGRAS DE COMPORTAMENTO" e "FORMATO DE SAÍDA POR COMPLEXIDADE".
+- **Tratamento de edge cases:** seção "TRATAMENTO DE EDGE CASES" (relato vago, múltiplos bugs, relato vazio, bug sem usuário óbvio).
+- **System vs User Prompt:** persona, regras e exemplos no `system_prompt`; a entrada dinâmica `{bug_report}` fica no `user_prompt`.
+
+---
+
+## Resultados Finais
+
+### Tabela comparativa (v1 vs v2)
+
+| Métrica      | Prompt v1 (ruim) | Prompt v2 (otimizado) | Meta   |
+| ------------ | ---------------- | --------------------- | ------ |
+| Helpfulness  | 0.45 ✗           | _preencher após avaliar_ | ≥ 0.9 |
+| Correctness  | 0.52 ✗           | _preencher após avaliar_ | ≥ 0.9 |
+| F1-Score     | 0.48 ✗           | _preencher após avaliar_ | ≥ 0.9 |
+| Clarity      | 0.50 ✗           | _preencher após avaliar_ | ≥ 0.9 |
+| Precision    | 0.46 ✗           | _preencher após avaliar_ | ≥ 0.9 |
+
+> Os valores de v1 são ilustrativos. Após rodar `python src/evaluate.py`, preencha a coluna do v2 com os números reais.
+
+### Evidências no LangSmith
+
+- **Dashboard público:** _adicionar link após o push/avaliação_
+- **Screenshots:** salvar em uma pasta `screenshots/` e referenciar aqui (dataset com 15 exemplos, execuções do v2 com notas ≥ 0.9 e tracing de ao menos 3 exemplos).
+
+---
+
+## Como Executar
+
+### Pré-requisitos
+
+- Python 3.9+
+- Conta no [LangSmith](https://smith.langchain.com/) (para `LANGSMITH_API_KEY` e seu `USERNAME_LANGSMITH_HUB`)
+- Uma API Key de LLM:
+  - **OpenAI** (`gpt-4o-mini` para responder, `gpt-4o` para avaliar), ou
+  - **Google Gemini** (`gemini-2.5-flash`) — free tier
+
+### 1. Ambiente virtual e dependências
+
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# Linux/Mac
+source venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### 2. Configurar variáveis de ambiente
+
+Copie `.env.example` para `.env` e preencha as chaves:
+
+```bash
+cp .env.example .env
+```
+
+Variáveis principais: `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `USERNAME_LANGSMITH_HUB`, `LLM_PROVIDER` (`google` ou `openai`) e a API key do provider escolhido (`GOOGLE_API_KEY` ou `OPENAI_API_KEY`).
+
+### 3. Comandos por fase
+
+```bash
+# Fase 1 - Pull do prompt ruim (leonanluppi/bug_to_user_story_v1)
+python src/pull_prompts.py
+
+# Fase 3 - Push do prompt otimizado v2 (público) para seu Hub
+python src/push_prompts.py
+
+# Fase 4 - Avaliação contra o dataset de 15 exemplos
+python src/evaluate.py
+
+# Testes de validação do prompt
+pytest tests/test_prompts.py -v
+```
+
+> Itere entre os passos de push e avaliação ajustando `prompts/bug_to_user_story_v2.yml` até que todas as 5 métricas fiquem ≥ 0.9.
+
+---
+
 ## Dicas Finais
 
 - **Lembre-se da importância da especificidade, contexto e persona** ao refatorar prompts
