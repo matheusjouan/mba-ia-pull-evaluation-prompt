@@ -48,3 +48,4 @@ ENV/
 screenshots/
 results/
 .claude/
+outputs_debug.txt
